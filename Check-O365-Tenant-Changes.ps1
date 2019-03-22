@@ -1,5 +1,9 @@
-# Script to check what the Azure AD Connect tool is potentially going to change as part of the initial sync of AD into an existing Office 365 tenant
-# Created by Robert Milner @ Italik
+<#
+    Script to check if the users within local AD have been setup correctly before the initial sync with Office 365 that already has existing users
+    This is to ensure that there are no potential issues before the sync
+    Created by Robert Milner @ Italik
+#>
+
 
 <#
     PowerShell Library Change Log:
@@ -9,10 +13,22 @@
 
 Param (
     [Parameter( Mandatory=$false )]
-    [string]$ADSearchBase
+    [string]$ADSearchBase,
+
+    [Parameter( Mandatory=$true )]
+    [string]$UserName
 )
 
-# Check to see if the Exchange Online PowerShell module exists
+# LOGGING TO THE SCREEN AND TO FILE
+
+if (!(Test-Path -Path "C:\Temp"))
+{
+    New-Item -Path "C:\Temp" -ItemType container
+}
+Start-Transcript -Path "C:\Temp\O365 Tennant Log.txt" -Append
+
+
+# Check to see if all the required PowerShell module exists
 
 $ExchangeMFAModule = 'Microsoft.Exchange.Management.ExoPowershellModule'
 $ModuleList = @(Get-ChildItem -Path "$($env:LOCALAPPDATA)\Apps\2.0" -Filter "$($ExchangeMFAModule).manifest" -Recurse ) | Sort-Object LastWriteTime -Desc | Select-Object -First 1
@@ -24,6 +40,8 @@ If ( $ModuleList)
 if (Get-Module -ListAvailable -FullyQualifiedName $ModuleName)
 {
     Write-Host "SUCCESS: Found Exchange Online PowerShell Module" -ForegroundColor Green
+    Import-Module -FullyQualifiedName $ModuleName -Force
+    New-EXOPSSession -ConnectionUri https://outlook.office365.com/powershell-liveid/ -userprincipalname $UserName
 } else
 {
     Write-Host "ERROR: Could not find Exchange Online PowerShell Module - please install" -ForegroundColor Red
@@ -34,6 +52,8 @@ if (Get-Module -ListAvailable -FullyQualifiedName $ModuleName)
 if (Get-Module -ListAvailable -Name "AzureAD")
 {
     Write-Host "SUCCESS: Found Azure AD PowerShell Module" -ForegroundColor Green
+    Import-Module -Name AzureAD -Force
+    Connect-AzureAD -AccountId $UserName
 } else
 {
     Write-Host "ERROR: Could not find Azure AD PowerShell Module - please install" -ForegroundColor Red
@@ -41,21 +61,40 @@ if (Get-Module -ListAvailable -Name "AzureAD")
     Exit
 }
 
-# LOGGING TO THE SCREEN AND TO FILE
-
-if (!(Test-Path -Path "C:\Temp"))
+if (Get-Module -ListAvailable -Name "MSOnline")
 {
-    New-Item -Path "C:\Temp" -ItemType container
+    Write-Host "SUCCESS: Found MSOnline Module" -ForegroundColor Green
+    Import-Module -Name MSOnline -Force
+    Connect-MsolService
+} else
+{
+    Write-Host "ERROR: Could not find Azure AD PowerShell Module - please install" -ForegroundColor Red
+    Start-Process -FilePath https://www.powershellgallery.com/packages/MSOnline
+    Exit
 }
-Start-Transcript -Path "C:\Temp\O365 Tennant Log.txt" -Append
+
+if (Get-Module -ListAvailable -Name "ActiveDirectory")
+{
+    Write-Host "SUCCESS: Found ActiveDirectory Module" -ForegroundColor Green
+    Import-Module -Name ActiveDirectory -Force
+} else
+{
+    Write-Host "ERROR: Could not find ActiveDirectory Module" -ForegroundColor Red
+    Exit
+}
 
 # Connect to Office 365
 # Get list of domains
-$o365Domains = Get-MsolDomain -Status Verified | Select-Object -ExpandProperty Name
+$o365Domains = Get-MsolDomain -Status Verified
+$o365Domains = $o365Domains.Name -notmatch "onmicrosoft.com"
+
+foreach ($o365Domain in $o365Domains)
+{
+    Write-Host "INFO: Processing O365 domains; $($O365Domain)" -ForegroundColor Cyan
+}
+Write-Host ""
 
 # Get list of all users in local AD with a UPN:
-Import-Module ActiveDirectory
-
 if ($ADSearchBase)
 {
     $ADUsers = Get-ADUser -Filter * -SearchBase $ADSearchBase
@@ -171,3 +210,5 @@ foreach ($ADUser in $ADUsers)
     Clear-Variable -Name "AzureADUserUPN" -ErrorAction SilentlyContinue
     Clear-Variable -Name "AzureADUserProxy" -ErrorAction SilentlyContinue
 }
+
+Write-Host "Make sure to now run IDFix to ensure that there are no further issues"
