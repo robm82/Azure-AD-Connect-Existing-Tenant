@@ -12,6 +12,35 @@ Param (
     [string]$ADSearchBase
 )
 
+# Check to see if the Exchange Online PowerShell module exists
+
+$ExchangeMFAModule = 'Microsoft.Exchange.Management.ExoPowershellModule'
+$ModuleList = @(Get-ChildItem -Path "$($env:LOCALAPPDATA)\Apps\2.0" -Filter "$($ExchangeMFAModule).manifest" -Recurse ) | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+If ( $ModuleList)
+{
+    $ModuleName = Join-path -Path $ModuleList[0].Directory.FullName -ChildPath "$($ExchangeMFAModule).dll"
+}
+
+if (Get-Module -ListAvailable -FullyQualifiedName $ModuleName)
+{
+    Write-Host "SUCCESS: Found Exchange Online PowerShell Module" -ForegroundColor Green
+} else
+{
+    Write-Host "ERROR: Could not find Exchange Online PowerShell Module - please install" -ForegroundColor Red
+    Start-Process -FilePath http://bit.ly/ExOPSModule
+    Exit
+}
+
+if (Get-Module -ListAvailable -Name "AzureAD1")
+{
+    Write-Host "SUCCESS: Found Azure AD PowerShell Module" -ForegroundColor Green
+} else
+{
+    Write-Host "ERROR: Could not find Azure AD PowerShell Module - please install" -ForegroundColor Red
+    Start-Process -FilePath https://www.powershellgallery.com/packages/AzureAD
+    Exit
+}
+
 # LOGGING TO THE SCREEN AND TO FILE
 
 if (!(Test-Path -Path "C:\Temp"))
@@ -19,17 +48,6 @@ if (!(Test-Path -Path "C:\Temp"))
     New-Item -Path "C:\Temp" -ItemType container
 }
 Start-Transcript -Path "C:\Temp\O365 Tennant Log.txt" -Append
-
-function LogScreen()
-{
-    param ([string]$logstring)
-    $DateTime = (Get-Date).ToString('yyyyMMdd HH:mm:ss')
-    $content = "$DateTime : $logstring"
-    Write-Host $content
-}
-
-$currDir = Convert-Path -Path .
-LogScreen "Working Directory: $($currDir)"
 
 # Connect to Office 365
 # Get list of domains
