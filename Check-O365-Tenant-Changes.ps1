@@ -31,7 +31,7 @@ if (Get-Module -ListAvailable -FullyQualifiedName $ModuleName)
     Exit
 }
 
-if (Get-Module -ListAvailable -Name "AzureAD1")
+if (Get-Module -ListAvailable -Name "AzureAD")
 {
     Write-Host "SUCCESS: Found Azure AD PowerShell Module" -ForegroundColor Green
 } else
