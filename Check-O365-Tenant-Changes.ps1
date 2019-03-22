@@ -18,7 +18,6 @@ if (!(Test-Path -Path "C:\Temp"))
 {
     New-Item -Path "C:\Temp" -ItemType container
 }
-$appLogName = $ApplicationName -replace " ","_"
 Start-Transcript -Path "C:\Temp\O365 Tennant Log.txt" -Append
 
 function LogScreen()
@@ -92,7 +91,7 @@ foreach ($ADUser in $ADUsers)
         Write-Host "MATCH: User account $($ADuser.Name) has a proxy address assigned within AD" -ForegroundColor Green
         foreach ($proxyAddress in $proxyAddresses)
         {
-            Write-Host "$($proxyAddress)" -ForegroundColor Cyan
+            Write-Host "INFO: Proxy Address; $($proxyAddress)" -ForegroundColor Cyan
         }
 
         $PrimarySMTP = $PrimarySMTP.split(":",2)
@@ -109,8 +108,44 @@ foreach ($ADUser in $ADUsers)
 
     # Check the user in Office 365 for the UPN and check it again AD
     # Azure AD will softmatch the user against the UPN, ProxyAddresses listed in AD
-    Get-AzureADUser -ObjectId $PrimarySMTP | Select-Object -ExpandProperty UserPrincipalName
+
+    try
+    {
+        $AzureADUserUPN = Get-AzureADUser -ObjectId $userUPN | Select-Object -ExpandProperty UserPrincipalName
+    }
+    catch
+    {
+        Write-Host "DEBUG: $($AzureADUserUPN)"
+        Write-Host "WARNING: User account $($ADuser.Name) UPN ($($userUPN)) cannot be matched against an Office 365 UPN" -ForegroundColor Yellow
+    }
+
+    try
+    {
+        $AzureADUserProxy = Get-AzureADUser -ObjectId $PrimarySMTP -ErrorAction SilentlyContinue | Select-Object -ExpandProperty UserPrincipalName
+    }
+    catch
+    {
+        Write-Host "WARNING: User account $($ADuser.Name) Proxy Address ($($PrimarySMTP)) cannot be matched against an Office 365 UPN" -ForegroundColor Yellow
+    }
+
+    if ($AzureADUserUPN)
+    {
+        Write-Host "MATCH: User account $($ADuser.Name) with the AD UPN of $($userUPN) matches the UPN in Office 365 $($AzureADUserUPN)" -ForegroundColor Green
+        Write-Host "INFO: Account will softmatch as part of the initial sync" -ForegroundColor Cyan
+    }
+    elseif ($AzureADUserProxy)
+    {
+        Write-Host "MATCH: User account $($ADuser.Name) with the Proxy Address $($PrimarySMTP) matches the UPN in Office 365 $($AzureADUserProxy)" -ForegroundColor Green
+        Write-Host "INFO: Account will softmatch as part of the initial sync" -ForegroundColor Cyan
+    }
 
     # Blank line at the bottom to split up the users as we log to the screen
     Write-Host ""
+
+    # Cleanup variables
+    Clear-Variable -Name "PrimarySMTP" -ErrorAction SilentlyContinue
+    Clear-Variable -Name "userUPN" -ErrorAction SilentlyContinue
+    Clear-Variable -Name "proxyAddresses" -ErrorAction SilentlyContinue
+    Clear-Variable -Name "AzureADUserUPN" -ErrorAction SilentlyContinue
+    Clear-Variable -Name "AzureADUserProxy" -ErrorAction SilentlyContinue
 }
