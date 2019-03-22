@@ -115,7 +115,6 @@ foreach ($ADUser in $ADUsers)
     }
     catch
     {
-        Write-Host "DEBUG: $($AzureADUserUPN)"
         Write-Host "WARNING: User account $($ADuser.Name) UPN ($($userUPN)) cannot be matched against an Office 365 UPN" -ForegroundColor Yellow
     }
 
@@ -137,6 +136,11 @@ foreach ($ADUser in $ADUsers)
     {
         Write-Host "MATCH: User account $($ADuser.Name) with the Proxy Address $($PrimarySMTP) matches the UPN in Office 365 $($AzureADUserProxy)" -ForegroundColor Green
         Write-Host "INFO: Account will softmatch as part of the initial sync" -ForegroundColor Cyan
+    }
+
+    if (!($AzureADUserUPN) -and !($AzureADUserProxy))
+    {
+        Write-Host "WARNING: User account $($ADuser.Name) cannot be found within Office 365 (a new object with be created)" -ForegroundColor Yellow
     }
 
     # Blank line at the bottom to split up the users as we log to the screen
